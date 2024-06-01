@@ -1,29 +1,9 @@
-/**
- * Copyright 2022 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-
-
-# Create a VPC network
 resource "google_compute_network" "default" {
   name                    = var.network_name
   auto_create_subnetworks = false
   routing_mode            = "REGIONAL"
 }
 
-# Create a subnet within the VPC network
 resource "google_compute_subnetwork" "default" {
   name                       = var.subnet_name
   ip_cidr_range              = var.subnet_cidr
@@ -31,7 +11,6 @@ resource "google_compute_subnetwork" "default" {
   region                     = var.region
 }
 
-# Create a proxy-only subnetwork
 resource "google_compute_subnetwork" "proxy_only" {
   name          = "proxy-only-subnet"
   ip_cidr_range = "10.129.0.0/23"
@@ -41,7 +20,6 @@ resource "google_compute_subnetwork" "proxy_only" {
   role          = "ACTIVE"
 }
 
-# Create a firewall rule to allow health check traffic
 resource "google_compute_firewall" "default" {
   name = "fw-allow-health-check"
   allow {
@@ -54,11 +32,10 @@ resource "google_compute_firewall" "default" {
   target_tags   = ["load-balanced-backend"]
 }
 
-# Create a firewall rule to allow traffic from the proxy-only subnet
 resource "google_compute_firewall" "allow_proxy" {
   name = "fw-allow-proxies"
   allow {
-    ports    = ["443", "80", "8080","5000"]
+    ports    = ["443", "80", "8080", "5000"]
     protocol = "tcp"
   }
   direction     = "INGRESS"
@@ -68,7 +45,6 @@ resource "google_compute_firewall" "allow_proxy" {
   target_tags   = ["load-balanced-backend"]
 }
 
-# Create an instance template with a startup script
 resource "google_compute_instance_template" "default" {
   name = var.instance_name
   disk {
@@ -102,7 +78,6 @@ resource "google_compute_instance_template" "default" {
   tags = ["load-balanced-backend"]
 }
 
-# Create a managed instance group
 resource "google_compute_instance_group_manager" "default" {
   name               = var.instance_name
   base_instance_name = var.instance_name
@@ -117,14 +92,12 @@ resource "google_compute_instance_group_manager" "default" {
   zone = var.zone
 }
 
-# Reserve a static external IP address
 resource "google_compute_address" "default" {
   name         = var.instance_name
   address_type = "EXTERNAL"
   region       = var.region
 }
 
-# Create a health check
 resource "google_compute_region_health_check" "default" {
   name               = var.instance_name
   check_interval_sec = 5
@@ -138,7 +111,6 @@ resource "google_compute_region_health_check" "default" {
   unhealthy_threshold = 2
 }
 
-# Create a backend service
 resource "google_compute_region_backend_service" "default" {
   name                  = var.instance_name
   region                = var.region
@@ -155,7 +127,6 @@ resource "google_compute_region_backend_service" "default" {
   depends_on = [google_compute_instance_group_manager.default]
 }
 
-# Create a URL map
 resource "google_compute_region_url_map" "default" {
   name            = var.instance_name
   region          = var.region
@@ -164,7 +135,6 @@ resource "google_compute_region_url_map" "default" {
   depends_on = [google_compute_region_backend_service.default]
 }
 
-# Create an HTTP proxy
 resource "google_compute_region_target_http_proxy" "default" {
   name    = var.instance_name
   region  = var.region
@@ -173,7 +143,6 @@ resource "google_compute_region_target_http_proxy" "default" {
   depends_on = [google_compute_region_url_map.default]
 }
 
-# Create a forwarding rule
 resource "google_compute_forwarding_rule" "default" {
   name       = var.instance_name
   provider   = google-beta
@@ -186,34 +155,12 @@ resource "google_compute_forwarding_rule" "default" {
   network               = google_compute_network.default.id
   ip_address            = google_compute_address.default.id
   network_tier          = "PREMIUM"
-  depends_on            = [google_compute_subnetwork.proxy_only, google_compute_region_target_http_proxy.default]
-}
-# Create a Cloud SQL instance with private IP
-resource "google_sql_database_instance" "instance" {
-  name             = var.sql_instance_name
-  region           = var.region
-  database_version = var.sql_database_version
-
-  settings {
-    tier = var.sql_tier
-    ip_configuration {
-      ipv4_enabled    = false
-      private_network = google_compute_network.default.id
-    }
-  }
-
-  deletion_protection = false
-
-  depends_on = [google_service_networking_connection.default]
+  depends_on            = [
+    google_compute_subnetwork.proxy_only,
+    google_compute_region_target_http_proxy.default,
+  ]
 }
 
-
-
-
-
-
-
-# Reserve a private IP address for VPC peering
 resource "google_compute_global_address" "private_ip_address" {
   name          = var.sql_private_ip_name
   purpose       = "VPC_PEERING"
@@ -222,19 +169,14 @@ resource "google_compute_global_address" "private_ip_address" {
   network       = google_compute_network.default.id
 }
 
-# Create a VPC peering connection between the network and the Cloud SQL service
+
+
 resource "google_service_networking_connection" "default" {
   network                 = google_compute_network.default.id
   service                 = "servicenetworking.googleapis.com"
   reserved_peering_ranges = [google_compute_global_address.private_ip_address.name]
+  
+  
 }
 
-resource "google_compute_network_peering_routes_config" "peering_routes" {
-  peering              = google_service_networking_connection.default.peering
-  network              = google_compute_network.default.name
-  import_custom_routes = true
-  export_custom_routes = true
-
-  depends_on = [google_sql_database_instance.instance]
-}
 

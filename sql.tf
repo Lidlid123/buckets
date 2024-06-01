@@ -1,22 +1,27 @@
+resource "google_sql_database_instance" "instance" {
+  name             = var.sql_instance_name
+  region           = var.region
+  database_version = var.sql_database_version
 
+  settings {
+    tier = var.sql_tier
+    ip_configuration {
+      ipv4_enabled    = false
+      private_network = google_compute_network.default.id
+    }
+  }
 
+  deletion_protection = false
 
-# Create a user with no password (not recommended for production)
+  # Ensure SQL instance is destroyed before the networking connection
+   depends_on = [google_service_networking_connection.default]
+}
+
 resource "google_sql_user" "user" {
   name     = "app_user"
   instance = google_sql_database_instance.instance.name
   host     = "%"
   password = ""
 
-  depends_on     = [google_service_networking_connection.default]
+  
 }
-
-# Configure peering routes to import and export custom routes
-
-# Optionally, configure DNS for the private IPs of the peered network
-# resource "google_service_networking_peered_dns_domain" "default" {
-#   name       = var.dns_domain_name
-#   network    = google_compute_network.default.name
-#   dns_suffix = var.dns_suffix
-#   service    = "servicenetworking.googleapis.com"
-# }
