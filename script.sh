@@ -4,9 +4,11 @@
 sudo apt update -y
 
 # Install dependencies securely using trusted repositories
-sudo apt install -y --no-install-recommends python3 python3-pip rsync
+sudo apt install -y  python3 python3-pip
 
 sudo apt install git -y 
+sudo apt install python3-setuptools -y
+
 # Install Flask using pip3
 pip3 install Flask
 
