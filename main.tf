@@ -58,7 +58,7 @@ resource "google_compute_firewall" "default" {
 resource "google_compute_firewall" "allow_proxy" {
   name = "fw-allow-proxies"
   allow {
-    ports    = ["443", "80", "8080"]
+    ports    = ["443", "80", "8080","5000"]
     protocol = "tcp"
   }
   direction     = "INGRESS"
